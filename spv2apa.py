@@ -68,13 +68,14 @@ def sig_to_asterisks(p):
 # Clean up the dataframe
 if output_type == "Hierarchical Regression":
     df = df.rename(columns={"Unnamed: 0": "Model", "Unnamed: 1": "Variable", "Unnamed: 5": "t", "Unnamed: 6": "Sig."})
+    df = df.drop(df.tail(1).index)
 elif output_type == "GLM":
     df = df.rename(columns={"Dependent Variable": "Model", "Parameter": "Variable", "95% Confidence Interval": "95% Confidence Interval LB", "Unnamed: 7": "95% Confidence Interval UB"})
     df = df.drop(df.head(1).index)
+    df = df.drop(df.tail(1).index)
 elif output_type == "Correlations":
     df = df.rename(columns={"Unnamed: 0": "Variable", "Unnamed: 1": "Parameter"})
-    df = df.drop(df.tail(1).index)
-df = df.drop(df.tail(1).index)
+    df = df.drop(df.tail(2).index)
 
 df_final = pd.DataFrame()
 
@@ -97,7 +98,6 @@ if output_type != "Correlations":
 
     # For each model, get parameters, format them, and add as new columns to the final df
     for i in model_list:
-        #model_name = "Model " + str(i)
         cells_list = []
         df_subset = df[df["Model"] == i].reset_index(drop=True)
         for j in range(0, len(df_subset)):
