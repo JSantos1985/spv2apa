@@ -72,7 +72,8 @@ if output_type == "Hierarchical Regression":
 elif output_type == "GLM":
     df = df.rename(columns={"Dependent Variable": "Model", "Parameter": "Variable", "95% Confidence Interval": "95% Confidence Interval LB", "Unnamed: 7": "95% Confidence Interval UB"})
     df = df.drop(df.head(1).index)
-    df = df.drop(df.tail(1).index)
+    if df.tail(1).iloc[0,0] == "a This parameter is set to zero because it is redundant.":
+        df = df.drop(df.tail(1).index)
 elif output_type == "Correlations":
     df = df.rename(columns={"Unnamed: 0": "Variable", "Unnamed: 1": "Parameter"})
     df = df.drop(df.tail(2).index)
