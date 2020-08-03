@@ -26,7 +26,7 @@ doc = docx.Document("template.docx")
 # Significance is used to define the reference values to be used, check thresholds
 thresholds = {1: [0.01, 0.05, 0.1],
               2: [0.001, 0.01, 0.05]}
-significance = 1
+significance = 2
 p_notes = "Notes: " + "*** p < " + str(thresholds[significance][0]) + "; " + "** p < " + str(thresholds[significance][1]) + "; " + "* p < " + str(thresholds[significance][2])
 
 def dataframe_to_docx(dataframe):
@@ -71,9 +71,11 @@ if output_type == "Hierarchical Regression":
     df = df.drop(df.tail(1).index)
 elif output_type == "GLM":
     df = df.rename(columns={"Dependent Variable": "Model", "Parameter": "Variable", "95% Confidence Interval": "95% Confidence Interval LB", "Unnamed: 7": "95% Confidence Interval UB"})
-    df = df.drop(df.head(1).index)
+    df = df.drop(df.tail(1).index)
     if df.tail(1).iloc[0,0] == "a This parameter is set to zero because it is redundant.":
         df = df.drop(df.tail(1).index)
+    df = df.drop(df.head(1).index)
+
 elif output_type == "Correlations":
     df = df.rename(columns={"Unnamed: 0": "Variable", "Unnamed: 1": "Parameter"})
     df = df.drop(df.tail(2).index)
