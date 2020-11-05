@@ -6,8 +6,9 @@ This script converts SPSS outputs to APA style tables. It is very similar in pur
 ### Supported outputs
 Currently supported outputs are:
 - Pearson & Spearman correlations (correlation matrix)
-- GLM (parameter estimats)
+- Univariate and Multivariate GLM (parameter estimates)
 - Linear Regression (coefficients)
+- Generalized Linear Models (Logit regressions)
 
 Two different thresholds for significance can be used:
 - 0.01, 0.05, 0.1,
