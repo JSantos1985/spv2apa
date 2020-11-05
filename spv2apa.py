@@ -1,5 +1,6 @@
 import pandas as pd
 import docx
+import re
 from numpy import nan
 
 input = "input.xlsx"
@@ -7,17 +8,36 @@ output = "output.docx"
 
 # Check what we are dealing with, clean garbage data
 df = pd.read_excel(input, nrows=0).columns[0]
+df2 = pd.read_excel(input, nrows=1).iloc[0,0]
+
 output_type = ""
+analysis_type = ""
 if df == "Coefficientsa":
     output_type = "Hierarchical Regression"
+    analysis_type = "Univariate"
     df = pd.read_excel(input, header=2)
 elif df == "Parameter Estimates":
-    output_type = "GLM"
-    df = pd.read_excel(input, header=1)
+    if df2 == "Parameter":
+        output_type ="GeneralizedLM"
+        analysis_type = "Univariate"
+        df = pd.read_excel(input, header=1)
+    elif "Dependent Variable:" in df2:
+        output_type = "GLM"
+        analysis_type = "Univariate"
+        prefetch_dv = re.sub("Dependent Variable:   ", "", df2)
+        df = pd.read_excel(input, header=2)
+    else:
+        output_type = "GLM"
+        analysis_type = "Multivariate"
+        df = pd.read_excel(input, header=1)
 elif df == "Correlations":
     output_type = "Correlations"
     df = pd.read_excel(input, header=1)
     df = df.replace({"\*": "", ",": "0."}, regex=True)
+    # Spearman correlations outputs have different layouts than Pearons, this fixes that
+    if df.iloc[0,0] == "Spearman's rho":
+        del df['Unnamed: 0']
+        df = df.rename(columns={"Unnamed: 1": "Unnamed: 0", "Unnamed: 2": "Unnamed: 1"})
 
 df = df.replace({".": nan, "0a": nan})
 
@@ -71,11 +91,17 @@ if output_type == "Hierarchical Regression":
     df = df.drop(df.tail(1).index)
 elif output_type == "GLM":
     df = df.rename(columns={"Dependent Variable": "Model", "Parameter": "Variable", "95% Confidence Interval": "95% Confidence Interval LB", "Unnamed: 7": "95% Confidence Interval UB"})
-    df = df.drop(df.tail(1).index)
+    #df = df.drop(df.tail(1).index) # WHY WAS THIS HERE?
     if df.tail(1).iloc[0,0] == "a This parameter is set to zero because it is redundant.":
         df = df.drop(df.tail(1).index)
-    df = df.drop(df.head(1).index)
-
+    df = df.drop(df.head(1).index).reset_index(drop=True)
+    if analysis_type == "Univariate":
+        df["Model"] = prefetch_dv
+elif output_type == "GeneralizedLM":
+    df = df.rename(columns={"Parameter": "Variable", "95% Wald Confidence Interval": "95% Wald Confidence Interval LB", "Unnamed: 4": "95% Wald Confidence Interval UB", "Unnamed: 6": "df", "Unnamed: 7": "Sig.", "95% Wald Confidence Interval for Exp(B)": "95% Wald Confidence Interval for Exp(B) LB", "Unnamed: 10": "95% Wald Confidence Interval for Exp(B) UB"})
+    df = df.drop(0, axis=0).reset_index(drop=True)
+    df["Model"] = re.sub("Dependent Variable: ", "", df.iloc[-4,0])
+    df = df.drop(df.tail(5).index)
 elif output_type == "Correlations":
     df = df.rename(columns={"Unnamed: 0": "Variable", "Unnamed: 1": "Parameter"})
     df = df.drop(df.tail(2).index)
@@ -85,24 +111,30 @@ df_final = pd.DataFrame()
 if output_type != "Correlations":
     model_list = []
     model = ""
-
-    # Replace NAN in model column with model number, get number of models
-    for i in range(0, len(df)):
-        cell = df.iloc[i, 0]
-        if pd.isnull(cell) == False:
-            model = cell
-            model_list.append(model)
-        else:
-            df.iloc[i, 0] = model
+    if analysis_type == "Multivariate":
+        # Replace NAN in model column with model number, get number of models
+        for i in range(0, len(df)):
+            cell = df.iloc[i, 0]
+            if pd.isnull(cell) == False:
+                model = cell
+                model_list.append(model)
+            else:
+                df.iloc[i, 0] = model
+    # For Univariates we only have a single model so we just need to inject that one to the model list
+    elif analysis_type == "Univariate":
+        model = df.loc[0, "Model"]
+        model_list.append(model)
 
     # Get list of variables from full model, inject those into the cleaned df
     df_subset = df[df["Model"] == model_list[-1]]
     df_final["Variable"] = df_subset["Variable"].reset_index(drop=True)
 
+
     # For each model, get parameters, format them, and add as new columns to the final df
     for i in model_list:
         cells_list = []
         df_subset = df[df["Model"] == i].reset_index(drop=True)
+
         for j in range(0, len(df_subset)):
             b = df_subset.loc[j, "B"]
             se = df_subset.loc[j, "Std. Error"]
@@ -113,10 +145,11 @@ if output_type != "Correlations":
             else:
                 cell_value = "{0:.3f}".format(b) + sig_to_asterisks(sig) + "\n" + "(" + "{0:.3f}".format(se) + ")"
             cells_list.append(cell_value)
+
         df_final[str(i)] = pd.Series(cells_list)
 
     # Clear reference categories
-    if output_type == "GLM":
+    if output_type == "GLM" or output_type == "GeneralizedLM":
         df_final = df_final.dropna()
 
 elif output_type == "Correlations":
@@ -125,7 +158,7 @@ elif output_type == "Correlations":
     for i in range(0, len(df)):
         for j in range(2, len(df.columns)):
             cell = df.iloc[i, j]
-            if df.iloc[i,1] == "Pearson Correlation":
+            if df.iloc[i,1] == "Pearson Correlation" or df.iloc[i,1] == "Correlation Coefficient":
                 sig = df.iloc[i+1, j]
                 if pd.isnull(sig) == True:
                     pass
