@@ -14,7 +14,6 @@ output_type = ""
 analysis_type = ""
 if df == "Coefficientsa":
     output_type = "Hierarchical Regression"
-    analysis_type = "Univariate"
     df = pd.read_excel(input, header=2)
 elif df == "Parameter Estimates":
     if df2 == "Parameter":
@@ -92,6 +91,10 @@ if output_type == "Hierarchical Regression":
 elif output_type == "GLM":
     df = df.rename(columns={"Dependent Variable": "Model", "Parameter": "Variable", "95% Confidence Interval": "95% Confidence Interval LB", "Unnamed: 7": "95% Confidence Interval UB"})
     #df = df.drop(df.tail(1).index) # WHY WAS THIS HERE?
+    if df.tail(1).iloc[0,0] == "a Computed using alpha = ,05":
+        df = df.drop(df.tail(1).index)
+    if df.tail(1).iloc[0,0] == "b Computed using alpha = ,05":
+        df = df.drop(df.tail(1).index)
     if df.tail(1).iloc[0,0] == "a This parameter is set to zero because it is redundant.":
         df = df.drop(df.tail(1).index)
     df = df.drop(df.head(1).index).reset_index(drop=True)
@@ -111,7 +114,7 @@ df_final = pd.DataFrame()
 if output_type != "Correlations":
     model_list = []
     model = ""
-    if analysis_type == "Multivariate":
+    if analysis_type == "Multivariate" or output_type == "Hierarchical Regression":
         # Replace NAN in model column with model number, get number of models
         for i in range(0, len(df)):
             cell = df.iloc[i, 0]
@@ -128,7 +131,6 @@ if output_type != "Correlations":
     # Get list of variables from full model, inject those into the cleaned df
     df_subset = df[df["Model"] == model_list[-1]]
     df_final["Variable"] = df_subset["Variable"].reset_index(drop=True)
-
 
     # For each model, get parameters, format them, and add as new columns to the final df
     for i in model_list:
@@ -167,7 +169,7 @@ elif output_type == "Correlations":
 
     # Clean up unnecessary rows and columns
     df = df.dropna()
-    df = df.drop("Parameter", 1)
+    df = df.drop(columns="Parameter")
 
     # Remove redundant lower half of the matrix
     for j in range(1, len(df.columns)):

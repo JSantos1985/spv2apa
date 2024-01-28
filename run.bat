@@ -1,1 +1,3 @@
-"C:\Python38\python.exe" "formatator.py"
+"C:\ProgramData\Anaconda3\python.exe" "spv2apa.py"
+start output.docx
+PAUSE
