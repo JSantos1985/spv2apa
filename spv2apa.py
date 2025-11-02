@@ -10,9 +10,6 @@ output = "output.docx"
 df = pd.read_excel(input, nrows=0).columns[0]
 df2 = pd.read_excel(input, nrows=1).iloc[0,0]
 
-print(df)
-print(df2)
-
 output_type = ""
 analysis_type = ""
 if df == "Coefficientsa":
