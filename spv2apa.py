@@ -10,6 +10,9 @@ output = "output.docx"
 df = pd.read_excel(input, nrows=0).columns[0]
 df2 = pd.read_excel(input, nrows=1).iloc[0,0]
 
+print(df)
+print(df2)
+
 output_type = ""
 analysis_type = ""
 if df == "Coefficientsa":
@@ -20,13 +23,19 @@ elif df == "Parameter Estimates":
         output_type ="GeneralizedLM"
         analysis_type = "Univariate"
         df = pd.read_excel(input, header=1)
+    elif df2 == "Dependent Variable":
+        print("yo")
+        output_type = "GLM"
+        analysis_type = "Multivariate"
+        df = pd.read_excel(input, header=1)
     elif "Dependent Variable:" in df2:
         output_type = "GLM"
         analysis_type = "Univariate"
         prefetch_dv = re.sub("Dependent Variable:   ", "", df2)
         df = pd.read_excel(input, header=2)
     else:
-        output_type = "GLM"
+        # Right now this is assuming Multinomial logistic due to a lack of better identifiers
+        output_type = "Multinomial"
         analysis_type = "Multivariate"
         df = pd.read_excel(input, header=1)
 elif df == "Correlations":
@@ -45,7 +54,7 @@ doc = docx.Document("template.docx")
 # Significance is used to define the reference values to be used, check thresholds
 thresholds = {1: [0.01, 0.05, 0.1],
               2: [0.001, 0.01, 0.05]}
-significance = 2
+significance = 1
 p_notes = "Notes: " + "*** p < " + str(thresholds[significance][0]) + "; " + "** p < " + str(thresholds[significance][1]) + "; " + "* p < " + str(thresholds[significance][2])
 
 def dataframe_to_docx(dataframe):
@@ -72,16 +81,39 @@ def dataframe_to_docx(dataframe):
 # Takes a p-value and returns asterisks
 def sig_to_asterisks(p):
     cutoff = thresholds[significance]
-
-    if p <= cutoff[0]:
+    if p == "<,001":
         asterisks = "***"
-    elif p <= cutoff[1]:
-        asterisks = "**"
-    elif p <= cutoff[2]:
-        asterisks = "*"
     else:
-        asterisks = ""
+        if p <= cutoff[0]:
+            asterisks = "***"
+        elif p <= cutoff[1]:
+            asterisks = "**"
+        elif p <= cutoff[2]:
+            asterisks = "*"
+        else:
+            asterisks = ""
     return asterisks
+
+def safe_float(x):
+    """Convert SPSS-like string values to float safely, return np.nan if not possible."""
+    if pd.isnull(x):
+        return nan
+    if isinstance(x, str):
+        # Replace comma with dot for decimals
+        x_clean = x.replace(',', '.').strip()
+        # Handle SPSS significance strings like "<,001"
+        if x_clean.startswith('<'):
+            # interpret as smaller than threshold
+            try:
+                return float(x_clean[1:])
+            except ValueError:
+                return 0.001  # fallback minimal value
+        try:
+            return float(x_clean)
+        except ValueError:
+            return nan
+    return x
+
 
 
 # Clean up the dataframe
@@ -89,6 +121,7 @@ if output_type == "Hierarchical Regression":
     df = df.rename(columns={"Unnamed: 0": "Model", "Unnamed: 1": "Variable", "Unnamed: 5": "t", "Unnamed: 6": "Sig."})
     df = df.drop(df.tail(1).index)
 elif output_type == "GLM":
+    print(df)
     df = df.rename(columns={"Dependent Variable": "Model", "Parameter": "Variable", "95% Confidence Interval": "95% Confidence Interval LB", "Unnamed: 7": "95% Confidence Interval UB"})
     #df = df.drop(df.tail(1).index) # WHY WAS THIS HERE?
     if df.tail(1).iloc[0,0] == "a Computed using alpha = ,05":
@@ -108,6 +141,18 @@ elif output_type == "GeneralizedLM":
 elif output_type == "Correlations":
     df = df.rename(columns={"Unnamed: 0": "Variable", "Unnamed: 1": "Parameter"})
     df = df.drop(df.tail(2).index)
+elif output_type == "Multinomial":
+    cols = df.columns.tolist()
+    cols[0] = "Model"
+    cols[1] = "Variable"
+    cols[5] = "df"
+    cols[6] = "Sig."
+    cols[7] = "Exp(B)"
+    cols[8] = "95% Wald Confidence Interval LB"
+    cols[9] = "95% Wald Confidence Interval UB"
+    df.columns = cols
+    df = df.drop(df.tail(2).index)
+   
 
 df_final = pd.DataFrame()
 
@@ -137,15 +182,21 @@ if output_type != "Correlations":
         cells_list = []
         df_subset = df[df["Model"] == i].reset_index(drop=True)
 
-        for j in range(0, len(df_subset)):
-            b = df_subset.loc[j, "B"]
-            se = df_subset.loc[j, "Std. Error"]
+        for j in range(len(df_subset)):
+            b = safe_float(df_subset.loc[j, "B"])
+            se = safe_float(df_subset.loc[j, "Std. Error"])
             sig = df_subset.loc[j, "Sig."]
-            # Check if this is a blank row such as a reference category, otherwise add the proper contents
-            if pd.isnull(b) == True:
+
+            if pd.isnull(b):
                 cell_value = nan
             else:
-                cell_value = "{0:.3f}".format(b) + sig_to_asterisks(sig) + "\n" + "(" + "{0:.3f}".format(se) + ")"
+                cell_value = (
+                    f"{b:.3f}"
+                    + sig_to_asterisks(sig)
+                    + "\n("
+                    + f"{se:.3f})"
+                )
+
             cells_list.append(cell_value)
 
         df_final[str(i)] = pd.Series(cells_list)
